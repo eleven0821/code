@@ -1,0 +1,201 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!-- 指向用户dao接口，做dao接口实现 -->
+<mapper namespace="com.zs.pms.dao.UserDao">
+
+	<!-- 关系映射 员工的部门编号与部门的id，association必须写在一起，collection必须写在一起 -->
+	<resultMap type="TUser" id="usermap">
+		<!-- 一对一关联，使用association property:属性名 column:关联的字段名 select:关联执行的sql语句 执行完sql返回的对象赋值给属性property -->
+		<!-- 从数据库中获取用户id，否则用户修改id=0 -->
+		<id property="id" column="id" />
+		<!-- 所属部门，一对一关联 -->
+		<association property="dept" column="dept" select="getDept" />
+		<!-- 用户一对多关联权限列表 -->
+		<collection property="permissions" column="id" select="getPermission" />
+
+	</resultMap>
+	
+	<!-- 关联执行的sql，获取用户的权限列表 -->
+	<select id="getPermission" parameterType="int" resultType="TPermission">
+		select * from tpermission where id in
+		(select pid from trolepermission
+		where rid in
+		(select rid from tuserrole where usid=#{id})) order by id
+	</select>
+	
+	
+	
+	<!-- 只关联部门 -->
+	<resultMap type="TUser" id="usermap2">
+		<!-- 一对一关联，使用association property:属性名 column:关联的字段名 select:关联执行的sql语句 执行完sql返回的对象赋值给属性property -->
+		<!-- 所属部门，一对一关联 -->
+		<association property="dept" column="dept" select="getDept" />
+	</resultMap>
+	
+	<!-- 关联执行的sql，获取部门名称 -->
+	<select id="getDept" parameterType="int" resultType="TDep">
+		select *
+		from tdep where id=#{dept}
+	</select>
+	
+	
+	
+	<!-- sql片段，提高代码的复用性 -->
+	<!-- 查什么，查那张表的那些字段 -->
+	<sql id="selector">
+		select * from tuser
+	</sql>
+	
+	<!-- 查询条件 -->
+	<sql id="where">
+		<!-- where自动判断条件，Mybatis动态拼接SQL -->
+		<where>
+			<!-- 判断字符型：判空、判空字符串 -->
+			<if test="loginname!=null and loginname!=''">
+				and loginname=#{loginname}
+			</if>
+			<if test="password!=null and password!=''">
+				and password=#{password}
+			</if>
+			<if test="sex!=null and sex!=''">
+				and sex=#{sex}
+			</if>
+			<!-- 判断数字型：判0 -->
+			<if test="isenabled!=0">
+				and isenabled=#{isenabled}
+			</if>
+		</where>
+	</sql>
+	
+	<!-- 排序 -->
+	<sql id="order">
+		order by id desc
+	</sql>
+	
+	<!-- 分页
+		>和<必须使用转义字符
+		>为&gt;
+		<为&lt;
+	 -->
+	<sql id="page">
+		<where>
+			<if test="start!=0">
+				and rn&gt;=#{start}
+			</if>
+			<if test="end!=0">
+				and rn&lt;=#{end}
+			</if>
+		</where>
+	</sql>
+	
+	
+	
+	<!-- 正常关联，queryByPage分页查询，使用sql片段 -->
+	<select id="queryByPage" parameterType="QueryUser" resultMap="usermap2">
+		select * from (select rownum rn,t.* from(
+		<!-- 引入sql片段 -->
+		<include refid="selector" />
+		<include refid="where" />
+		<include refid="order" />
+		)t)t1
+		<include refid="page" />
+	</select>
+	
+	
+	<!-- 正常关联，queryByCon分页查询，使用sql片段 -->
+	<select id="queryByCon" parameterType="QueryUser" resultType="TUser">
+		
+		<!-- 引入sql片段 -->
+		<include refid="selector" />
+		<include refid="where" />
+		<include refid="order" />
+		
+	</select>
+	
+	<!-- 查询总条数 -->
+	<select id="queryCount" parameterType="QueryUser" resultType="int">
+		select count(1) from tuser
+		<!-- 引入sql片段 -->
+		<include refid="where" />
+	</select>
+	
+
+	<!-- 关联返回，当有resultMap时，找到resultMap标签，其中的select="方法名"，执行相应的方法 -->
+	<select id="queryById" parameterType="int" resultMap="usermap">
+		select *
+		from tuser where id=#{id}
+	</select>
+	
+	<!-- 批量删除，没有返回值 -->
+	<delete id="deleteByIds">
+		delete from tuser where id in
+		<!-- foreach循环拼SQL，多用于批量删除
+			collection:要拼SQL的参数类型，array为数组类型
+			item:定义的临时变量名
+			separator:SQL的参数分隔符
+			open:拼接SQL条件以xxx开始
+			close:拼接SQL条件以xxx结束
+		 -->
+		<foreach collection="array" item="id" separator="," open="(" close=")">
+			#{id}
+		</foreach>
+	</delete>
+	
+	
+	<!-- 删除 -->
+	<delete id="delete" parameterType="int">
+		delete from tuser where id=#{id}
+	</delete>
+	
+	
+	<!-- 修改 -->
+	<update id="update" parameterType="TUser">
+		update tuser 
+		<set>
+			<!-- 去掉最后一个参数后的逗号, -->
+			<trim suffixOverrides=",">
+				<if test="sex!=null and sex!=''">
+					sex=#{sex},
+				</if>
+				<if test="birthday!=null">
+					birthday=#{birthday},
+				</if>
+				<if test="email!=null and email!=''">
+					email=#{email},
+				</if>
+				<if test="dept!=null">
+					dept=#{dept.id}, <!-- 取dept的id -->
+				</if>
+				<if test="realname!=null and realname!=''">
+					realname=#{realname},
+				</if>
+				<if test="updator!=0">
+					updator=#{updator},
+				</if>
+				<if test="pic!=null and pic!=''">
+					pic=#{pic},
+				</if>
+				<if test="isenabled!=0">
+					isenabled=#{isenabled},
+				</if>
+				updatetime=sysdate,
+			</trim>
+		</set>
+		where id=#{id}
+	</update>
+	
+	<!-- 新增 -->
+	<insert id="insert" parameterType="TUser">
+		<!-- 生成序列
+			order="BEFORE" 在执行sql语句之前
+			keyProperty:主键属性名
+		 -->
+		<selectKey keyProperty="id" order="BEFORE" resultType="int">
+			 select SEQ_USER.Nextval from dual
+		</selectKey>
+		<!-- 指定字段新增 -->
+		insert into tuser (id,loginname,password,sex,birthday,email,dept,realname,creator,creatime,pic,isenabled)
+		values(#{id},#{loginname},#{password},#{sex},#{birthday},#{email},#{dept.id},#{realname},#{creator},sysdate,#{pic},1)
+	</insert>
+
+</mapper>

@@ -1,0 +1,174 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!-- 指向文章dao接口，做dao接口实现 -->
+<mapper namespace="com.zs.pms.dao.ArticleDao">
+
+	<!-- 关系映射 员工的部门编号与部门的id，association必须写在一起，collection必须写在一起 -->
+	<resultMap type="TArticle" id="articlemap">
+		<!-- 一对一关联，使用association property:属性名 column:关联的字段名 select:关联执行的sql语句 执行完sql返回的对象赋值给属性property -->
+		<!-- 所属部门，一对一关联 -->
+		<association property="channel" column="id" select="getChannel" />
+		
+
+	</resultMap>
+
+	<!-- 关联执行的sql，获取栏目名称 -->
+	<select id="getChannel" parameterType="int" resultType="TChannel">
+		select *
+		from tchannel where id=#{id}
+	</select>
+	
+	
+	
+	<!-- sql片段，提高代码的复用性 -->
+	<!-- 查什么，查那张表的那些字段 -->
+	<sql id="selector">
+		select * from tarticle
+	</sql>
+	
+	<!-- 查询条件 -->
+	<sql id="where">
+		<!-- where自动判断条件，Mybatis动态拼接SQL -->
+		<where>
+			<!-- 判断字符型：判空、判空字符串 -->
+			<if test="title!=null and title!=''">
+				and title=#{title}
+			</if>
+			<if test="author!=null and author!=''">
+				and author=#{author}
+			</if>
+			
+		</where>
+	</sql>
+	
+	<!-- 排序 -->
+	<sql id="order">
+		order by id desc
+	</sql>
+	
+	<!-- 分页
+		>和<必须使用转义字符
+		>为&gt;
+		<为&lt;
+	 -->
+	<sql id="page">
+		<where>
+			<if test="start!=0">
+				and rn&gt;=#{start}
+			</if>
+			<if test="end!=0">
+				and rn&lt;=#{end}
+			</if>
+		</where>
+	</sql>
+	
+	
+	
+	<!-- 正常关联，queryByPage分页查询，使用sql片段 -->
+	<select id="queryByPage" parameterType="QueryArticle" resultType="TArticle">
+		select * from (select rownum rn,t.* from(
+		<!-- 引入sql片段 -->
+		<include refid="selector" />
+		<include refid="where" />
+		<include refid="order" />
+		)t)t1
+		<include refid="page" />
+	</select>
+	
+	
+	<!-- 正常关联，queryByCon分页查询，使用sql片段 -->
+	<select id="queryByCon" parameterType="QueryArticle" resultType="TArticle">
+		
+		<!-- 引入sql片段 -->
+		<include refid="selector" />
+		<include refid="where" />
+		<include refid="order" />
+		
+	</select>
+	
+	<!-- 查询总条数 -->
+	<select id="queryCount" parameterType="QueryArticle" resultType="int">
+		select count(1) from tarticle
+		<!-- 引入sql片段 -->
+		<include refid="where" />
+	</select>
+	
+
+	<!-- 关联返回，当有resultMap时，找到resultMap标签，其中的select="方法名"，执行相应的方法 -->
+	<select id="queryById" parameterType="int" resultMap="articlemap">
+		select *
+		from tarticle where id=#{id}
+	</select>
+	
+	<!-- 批量删除，没有返回值 -->
+	<delete id="deleteByIds">
+		delete from tarticle where id in
+		<!-- foreach循环拼SQL，多用于批量删除
+			collection:要拼SQL的参数类型，array为数组类型
+			item:定义的临时变量名
+			separator:SQL的参数分隔符
+			open:拼接SQL条件以xxx开始
+			close:拼接SQL条件以xxx结束
+		 -->
+		<foreach collection="array" item="id" separator="," open="(" close=")">
+			#{id}
+		</foreach>
+	</delete>
+	
+	
+	<!-- 删除 -->
+	<delete id="delete" parameterType="int">
+		delete from tarticle where id=#{id}
+	</delete>
+	
+	
+	<!-- 修改 -->
+	<update id="update" parameterType="TArticle">
+		update tarticle 
+		<set>
+			<!-- 去掉最后一个参数后的逗号, -->
+			<trim suffixOverrides=",">
+				<if test="title!=null and title!=''">
+					title=#{title},
+				</if>
+				<if test="content!=null and content!=''">
+					content=#{content},
+				</if>
+				<if test="author!=null and author!=''">
+					author=#{author},
+				</if>
+				<if test="channel!=null">
+					dept=#{channel.id}, <!-- 取tchannel对象的id -->
+				</if>
+				<if test="isremod!=0">
+					isremod=#{isremod},
+				</if>
+				<if test="ishot!=0">
+					ishot=#{ishot},
+				</if>
+				
+				<if test="updater!=0">
+					updater=#{updater},
+				</if>
+				
+				updatime=sysdate,
+			</trim>
+		</set>
+		where id=#{id}
+	</update>
+	
+	<!-- 新增 -->
+	<insert id="insert" parameterType="TArticle">
+		<!-- 生成序列
+			order="BEFORE" 在执行sql语句之前
+			keyProperty:主键属性名
+		 -->
+		<selectKey keyProperty="id" order="BEFORE" resultType="int">
+			 select SEQ_ARTICLE.Nextval from dual
+		</selectKey>
+		<!-- 指定字段新增 -->
+		insert into tarticle (id,title,content,author,creator,crtime,channel,isremod,ishot)
+		values(#{id},#{title},#{content},#{author},#{creator},sysdate,#{channel.id},#{isremod},#{ishot})
+	</insert>
+
+</mapper>
